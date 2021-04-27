@@ -6,12 +6,14 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from deta import Deta
-from random import randint
+import uuid
 from dotenv import load_dotenv
 import os
 import sentry_sdk
 from datetime import date
 import secrets
+from tools import hashing
+import json
 
 
 # Load Sentry
@@ -30,6 +32,7 @@ sentry_sdk.init(
 load_dotenv()
 DETA_TOKEN = os.getenv("DETA_TOKEN")
 APP_TOKEN = os.getenv("APP_TOKEN")
+APP_USER = os.getenv("APP_USER")
 deta = Deta(DETA_TOKEN)  # configure your Deta project
 db = deta.Base("users")  # access your DB
 app = FastAPI()
@@ -51,64 +54,75 @@ def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
 
 class CreateUser(BaseModel):
     userid: str
-    password_hash: str
-    allowed_apps: Optional[str] = None
+    allowed_apps: Optional[list] = None
     
 class CheckUser(BaseModel):
     userid: str
-    password_hash: str
+    token: str
 
 
 @app.get("/")
 @limiter.limit("1000/minute")
 def read_root(request: Request):
-    return {"msg": "API SERVED BY BERRYSAUCE.ME - COPYRIGHT 2021"}
+    today = date.today()
+    year = str(today.year)
+    return {"msg": "API SERVED BY BERRYSAUCE.ME - COPYRIGHT " + year}
 
 
-@app.get("/check")
+@app.post("/check")
 @limiter.limit("100/minute")
 def read_item(user: CheckUser, request: Request):
     try:
-        request = next(db.fetch({"id": urlid}))[0]
-        return request
+        request = next(db.fetch({"userid": user.userid}))[0]
+        if hashing.verifypw(user.token, request["token"]) and request["disabled"] == False:
+            return {"valid": True}
+        else:
+            if request["disabled"] == True:
+                reason = "Account was disabled"
+            else:
+                reason = "The provieded token is invalid"
+            return {"valid": False,
+                    "reason": reason}
     except:
-        raise HTTPException(status_code=404, detail="Item not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
 
 @app.post("/create")
 @limiter.limit("10/minute")
 def add_item(user: CreateUser, request: Request, username: str = Depends(get_current_username)):
-    try:
-        rand = randint(10000, 99999)
+    #try:
+    if len(next(db.fetch({"userid": user.userid}))) is 0:
+        token = uuid.uuid4().hex
         today = str(date.today())
         db.insert({
-            "id": rand,
-            "url": url.url,
-            "notes": url.notes,
+            "userid": user.userid,
+            "token": hashing.hashpw(token),
+            "allowed_apps": user.allowed_apps,
             "date": today,
-            "show": False
+            "disabled": False
             })
         return {"msg": "Success!",
-                "user": username,
+                "created_by": username,
                 "data": {
-                    "id": rand,
-                    "url": url.url,
-                    "notes": url.notes}
+                    "userid": user.userid,
+                    "token": token,
+                    "allowed_apps": user.allowed_apps,
+                    "date": today}
                 }
-    except:
-        raise HTTPException(status_code=500, detail="Server error")
+    else:
+        raise HTTPException(status_code=409, detail="User already exists")
+    #except:
+    #    raise HTTPException(status_code=500, detail="Server error")
     
 
 @app.delete("/delete")
 @limiter.limit("5/minute")
-def delete_item(userid: str, request: Request, username: str = Depends(get_current_username)):
+def delete_item(user: str, request: Request, username: str = Depends(get_current_username)):
     try:
-        dburl = next(db.fetch({"url": url.url}))[0]
-        db.delete(dburl["key"])
+        dbuser = next(db.fetch({"userid": user}))[0]
+        db.delete(dbuser["key"])
         return {"msg": "Success!",
-                "username": username,
-                "deleted_url": url.url,
-                "deleted_id": dburl["id"],
-                "deleted_key": dburl["key"]}
+                "deleted_by": username,
+                "deleted_user": user}
     except Exception as exception:
         raise HTTPException(status_code=404, detail="Item not found")
