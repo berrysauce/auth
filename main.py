@@ -18,14 +18,11 @@ import json
 
 # Load Sentry
 
-"""
-CHANGE TO SENTRY PROJECT
-
+import sentry_sdk
 sentry_sdk.init(
-    https://0b626e39891a4dab8a4f191cc88f3469@o309026.ingest.sentry.io/5599097,
+    "https://6a0a18149aec4ee292e49b18d937b339@o309026.ingest.sentry.io/5738512",
     traces_sample_rate=1.0
 )
-"""
 
 # Setup
 
