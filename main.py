@@ -56,6 +56,7 @@ class CreateUser(BaseModel):
 class CheckUser(BaseModel):
     userid: str
     token: str
+    app_identifier: Optional[str] = None
 
 
 @app.get("/")
@@ -71,11 +72,25 @@ def read_root(request: Request):
 def read_item(user: CheckUser, request: Request):
     try:
         request = next(db.fetch({"userid": user.userid}))[0]
-        if hashing.verifypw(user.token, request["token"]) and request["disabled"] == False:
-            return {"valid": True}
+        
+        if user.app_identifier != None:
+            if user.app_identifier in request["allowed_apps"]:
+                allowed = True
+            elif user.app_identifier not in request["allowed_apps"]:
+                allowed = False
         else:
-            if request["disabled"] == True:
-                reason = "Account was disabled"
+            allowed = None
+        
+        if hashing.verifypw(user.token, request["token"]) and request["disabled"] is False and allowed is None:
+            return {"valid": True}
+        elif hashing.verifypw(user.token, request["token"]) and request["disabled"] is False and allowed is True:
+            return {"valid": True,
+                    "checked_for": str(user.app_identifier)}
+        else:
+            if request["disabled"] is True:
+                reason = "User was disabled"
+            elif allowed is False:
+                reason = "User is not authorized for this app"
             else:
                 reason = "The provieded token is invalid"
             return {"valid": False,
@@ -87,29 +102,29 @@ def read_item(user: CheckUser, request: Request):
 @app.post("/create")
 @limiter.limit("10/minute")
 def add_item(user: CreateUser, request: Request, username: str = Depends(get_current_username)):
-    #try:
-    if len(next(db.fetch({"userid": user.userid}))) is 0:
-        token = uuid.uuid4().hex
-        today = str(date.today())
-        db.insert({
-            "userid": user.userid,
-            "token": hashing.hashpw(token),
-            "allowed_apps": user.allowed_apps,
-            "date": today,
-            "disabled": False
-            })
-        return {"msg": "Success!",
-                "created_by": username,
-                "data": {
-                    "userid": user.userid,
-                    "token": token,
-                    "allowed_apps": user.allowed_apps,
-                    "date": today}
-                }
-    else:
-        raise HTTPException(status_code=409, detail="User already exists")
-    #except:
-    #    raise HTTPException(status_code=500, detail="Server error")
+    try:
+        if len(next(db.fetch({"userid": user.userid}))) is 0:
+            token = uuid.uuid4().hex
+            today = str(date.today())
+            db.insert({
+                "userid": user.userid,
+                "token": hashing.hashpw(token),
+                "allowed_apps": user.allowed_apps,
+                "date": today,
+                "disabled": False
+                })
+            return {"msg": "Success!",
+                    "created_by": username,
+                    "data": {
+                        "userid": user.userid,
+                        "token": token,
+                        "allowed_apps": user.allowed_apps,
+                        "date": today}
+                    }
+        else:
+            raise HTTPException(status_code=409, detail="User already exists")
+    except Exception as exception:
+        raise HTTPException(status_code=500, detail="Server error - {0}".format(exception))
     
 
 @app.delete("/delete")
