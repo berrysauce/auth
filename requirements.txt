@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 sentry_sdk
 pydantic
 uvicorn
@@ -7,3 +8,12 @@ python-dotenv
 slowapi
 pyOpenSSL
 secure
+=======
+sentry_sdk>=1.1.0
+pydantic>=1.8.2
+deta>=0.7
+fastapi>=0.65.1
+python-dotenv>=0.17.0
+slowapi>=0.1.4
+pyOpenSSL>=20.0.1
+>>>>>>> 1ec92f4623b6bc4e75aca3780e2aa3b107017e46
