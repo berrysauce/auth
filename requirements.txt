@@ -1,7 +1,9 @@
-sentry_sdk==1.0.0
-pydantic==1.8.1
-deta==0.7
-fastapi==0.63.0
-python-dotenv==0.17.0
-slowapi==0.1.4
-pyOpenSSL==20.0.1
+sentry_sdk
+pydantic
+uvicorn
+deta
+fastapi
+python-dotenv
+slowapi
+pyOpenSSL
+secure
